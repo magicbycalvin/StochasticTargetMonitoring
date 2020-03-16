@@ -1,172 +1,174 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Created on Thu Mar 12 12:13:19 2020
+Created on Thu Mar 12 20:43:41 2020
 
 @author: ckielasjensen
 """
 
-import random
-import time
-
-import matplotlib._color_data as mcd
-import matplotlib.pyplot as plt
 from numba import njit
 import numpy as np
-import scipy.optimize as sop
+from scipy.optimize import minimize
 
-import bezier as bez
-
-
-DEG_ELEV = 30
+from bezier import Bezier, RationalBezier
 
 
-def flight_plan(params, target, iniPt, iniSpeed, iniAng, t0, trajArray):
-    """ Plans the flight trajectory for the current agent
+#DEG_ELEV = 30
+
+
+def plan_flight(p0, v0, psi0, t0, trgt, trgt_cpts, pastCpts, pastTimes, params,
+                dt=None):
     """
-    finAng = 2*np.pi*np.random.rand()
-    x0 = init_guess(params, target, iniPt, iniSpeed, iniAng, params.tflight)
-    def fn(x): return cost_flight(x, target, finAng, params)
-    cons = [{'type': 'ineq',
-             'fun': lambda x: nonlinear_constraints(x, target, trajArray,
-                                                    params.tflight, finAng,
-                                                    t0, params)}]
+    """
+    while True:
+        ndim = 2
+        vf = params.monSpeed
+        psif = 2*np.pi*np.random.rand()
+        if dt is None:
+            dt = params.tflight
+        tf = t0 + dt
+        nveh = pastCpts.shape[0] // ndim
+        trgt_traj = Bezier(trgt_cpts, t0=t0, tf=t0+dt)
 
-    results = sop.minimize(fn, x0,
+        x0 = init_guess_f(p0, trgt, v0, vf, psi0, psif, dt, params.deg)
+        def fn(x): return cost_f(x, trgt, psif, params)
+        cons = [{'type': 'ineq',
+                 'fun': lambda x: nonlinear_constraints_f(x, p0, v0, vf, psi0,
+                                                          psif, t0, tf, nveh,
+                                                          trgt_traj,
+                                                          pastCpts, pastTimes,
+                                                          params)}]
+
+        results = minimize(fn, x0,
                            constraints=cons,
                            method='SLSQP',
-                           options={'maxiter': 100,
+                           options={'maxiter': 250,
                                     'disp': True,
-                                    'iprint': 0})
-    if not results.success:
-        print(results.message)
-    y = reshape(results.x, trajArray, params.nveh, params.deg, params.tf,
-                params.iniPt, params.iniSpeed, params.iniAng, params.monSpeed,
-                params.finAng)
+                                    'iprint': params.iprint})
 
-    return y
+        if not results.success:
+            print(results.message)
+            print(f'ETarget: {trgt}')
+            print(f'Psif: {psif}')
+            print(f'Cost: {fn(results.x)}')
+            print(f'Nonlcon:')
+            print(cons[0]['fun'](results.x) < 0)
+
+        y = reshape_f(results.x, p0, v0, vf, psi0, psif, dt, params.deg)
+        newTraj = Bezier(y, t0=t0, tf=tf)
+
+        if results.success:
+            break
+
+    return newTraj
 
 
-def mon_plan():
-    """ Plans the monitoring trajectory for the current agent
+def plan_mon(p0, v0, psi0, t0, trgt_cpts, pastCpts, pastTimes, dt, params):
     """
-    pass
 
-
-def init_guess(params, target, iniPt, iniSpeed, iniAng, trajDur):
-    """Provides an initial guess for the trajectory being planned
-
-    :param params: Object containing the mission parameters
-    :type params: Parameters
-    :param target: Expected future position of the target
-    :type target: np.ndarray
-    :param iniPt: Initial point of the vehicle
-    :type iniPt: np.ndarray
-    :param iniSpeed: Initial speed of the vehicle
-    :type iniSpeed: np.ndarray
-    :param iniAng: Initial heading of the vehicle
-    :type iniAng: np.ndarray
-    :param trajDur: Duration of the trajectory (i.e. tf-t0)
-    :type trajDur: float
+    MON CONSTRAINTS:
+        * Usual (speed, rate, Ds)
+        * Must be somewhere along the inner monitoring radius
     """
-    deg = params.deg
+    ndim = 2
+    vf = params.monSpeed
+    tf = t0 + dt
+    nveh = pastCpts.shape[0] // ndim
+    trgt = trgt_cpts[:, -1]
+    trgt_traj = Bezier(trgt_cpts, t0=t0, tf=t0+dt)
 
-    initMag = iniSpeed*trajDur/deg
-    iniX = iniPt[0] + initMag*np.cos(iniAng)       # X
-    iniY = iniPt[1] + initMag*np.sin(iniAng)       # Y
+    x0 = init_guess_m(p0, trgt, v0, vf, psi0, dt, params.deg)
+    def fn(x): return cost_m(x, trgt_cpts, p0, v0, psi0, dt, params)
+    cons = [{'type': 'ineq',
+             'fun': lambda x: nonlinear_constraints_m(x, p0, v0, vf, psi0,
+                                                      t0, tf, nveh, pastCpts,
+                                                      pastTimes, trgt,
+                                                      trgt_traj, params)}]
 
-    xguess = np.linspace(iniX, target[0], deg)[1:]
-    xguess = np.delete(xguess, -2)
-    yguess = np.linspace(iniY, target[1], deg)[1:]
-    yguess = np.delete(yguess, -2)
+    results = minimize(fn, x0,
+                       constraints=cons,
+                       method='SLSQP',
+                       options={'maxiter': 250,
+                                'disp': True,
+                                'iprint': params.iprint})
+
+    y = reshape_m(results.x, p0, v0, psi0, dt, params.deg)
+    newTraj = Bezier(y, t0=t0, tf=tf)
+
+    return newTraj
+
+
+# TODO
+#   * Make initial guess better by setting the final point on the outer
+#     monitoring radius instead of right on top of the target
+def init_guess_f(p0, trgt, v0, vf, psi0, psif, dt, deg):
+    """Straight line initial guess for the optimizer
+
+    :param p0: Initial 2D position of the agent, (x, y)
+    :type p0: np.ndarray
+    :param v0: Initial speed
+    :type v0: float
+    :param vf: Final speed
+    :type vf: float
+    :param psi0: Initial heading
+    :type psi0: float
+    :param psif: Final heading
+    :type psif: float
+    :param dt: Difference between final and initial time (i.e. tf - t0), used
+        for finding the magnitude of the vector between the first two control
+        points and between the last two control points
+    :type dt: float
+    :param deg: Degree of the Bernstein polynomials being used
+    :type deg: int
+    :return: Initial guess for the optimizer
+    :rtype: np.ndarray
+    """
+    initMag = v0*dt/deg
+    x1 = p0[0] + initMag*np.cos(psi0)
+    y1 = p0[1] + initMag*np.sin(psi0)
+
+    finalMag = vf*dt/deg
+    xn_1 = trgt[0] - finalMag*np.cos(psif)
+    yn_1 = trgt[1] - finalMag*np.sin(psif)
+
+    xguess = np.linspace(x1, xn_1, deg-1)[1:-1]
+    xguess = np.append(xguess, trgt[0])
+    yguess = np.linspace(y1, yn_1, deg-1)[1:-1]
+    yguess = np.append(yguess, trgt[1])
 
     x0 = np.concatenate((xguess, yguess))
 
     return x0
 
 
-@njit(cache=True)
-def reshape(x, trajArray, nveh, deg, tf, iniPt, iniSpeed, iniAng, finSpeed,
-            finAng):
-    """Reshapes the X vector being optimized into a matrix for computation
-
-    The optimization vector, X, should be of the following form:
-            X = [x2, ... xn-2, xn, y2, ..., yn-2, yn]
-            x0 and y0 come from the initial point
-            x1 and y1 come from the initial speed and heading
-            xn-1 and yn-1 come from the final speed and heading
-    The reshaped vector, y, will be a 2xn dimensional array where the rows are
-    the spatial dimensions (i.e. X dimension and Y dimension) and the columns
-    are the control points for the Bernstein polynomials.
-
-    Note that this only works for 2-dimensional problems.
-
-    :param x: X vector over which the optimization is happening
-    :type x: np.ndarray
-    :param trajArray: Array of existing trajectories that already match the
-        shape of y. These are appended to the created trajectory from X.
-    :type trajArray: np.ndarray
-    :param nveh: Number of vehicles
-    :type nveh: int
-    :param deg: Bernstein polynomial degree
-    :type deg: int
-    :param tf: Final time of the trajectory (assuming t0 = 0)
-    :type tf: float
-    :param inipt: Initial point of the current vehicle
-    :type inipt: np.ndarray
-    :param iniSpeed: Initial speed of the current vehicle
-    :type iniSpeed: float
-    :param iniAng: Initial heading of the current vehicle, in radians
-    :type iniAng: float
-    :param finSpeed: Final speed of the current vehicle
-    :type finSpeed: float
-    :param finAng: Final angle of the current vehicle
-    :type finAng: float
-    :return: Reshaped vector, y
-    :rtype: np.ndarray
+def init_guess_m(p0, trgt, v0, vf, psi0, dt, deg):
     """
-    ndim = 2
-
-    # Reshape X
-    y = np.empty((ndim*nveh, deg+1))
-    reshapedX = x.reshape((ndim, -1))
-    y[:ndim, 2:-2] = reshapedX[:, :-1]
-
-    # Initial points
-    y[0, 0] = iniPt[0]
-    y[1, 0] = iniPt[1]
-    y[:ndim, -1] = reshapedX[:, -1]
-
-    # Initial and final speeds and headings
-    initMag = iniSpeed*tf/deg
-    y[0, 1] = iniPt[0] + initMag*np.cos(iniAng)     # X
-    y[1, 1] = iniPt[1] + initMag*np.sin(iniAng)     # Y
-    finMag = finSpeed*tf/deg
-    y[0, -2] = reshapedX[0, -1] + finMag*np.cos(finAng)
-    y[1, -2] = reshapedX[1, -1] + finMag*np.sin(finAng)
-
-    # Add in the rest of the trajectories
-    if trajArray.size > 0:
-        y[ndim:, :] = trajArray
-
-    return y
-
-
-def build_traj_list(y, t0, tf, params):
-    """ Builds a list of Bezier trajectories
     """
-    trajs = []
-    for i in range(params.nveh):
-        t0 = params.nveh - i
-        trajs.append(bez.Bezier(y[i*params.ndim:(i+1)*params.ndim, :],
-                                t0=t0, tf=t0+tf))
+    initMag = v0*dt/deg
+    x1 = p0[0] + initMag*np.cos(psi0)
+    y1 = p0[1] + initMag*np.sin(psi0)
 
-    return trajs
+    psif = np.arctan2(trgt[1]-y1, trgt[0]-x1)
+    finalMag = vf*dt/deg
+    xn = trgt[0] - finalMag*np.cos(psif)
+    yn = trgt[1] - finalMag*np.sin(psif)
+
+    xguess = np.linspace(x1, xn, deg)[1:]
+    yguess = np.linspace(y1, yn, deg)[1:]
+
+    x0 = np.concatenate((xguess, yguess))
+
+    return x0
 
 
-def cost_flight(x, target, finAng, params):
+def cost_f(x, trgt, psif, params):
     """Cost function for the flight trajectory
 
+    The cost is defined as the straight line distance between the final control
+    point of the agent's trajectory and some random point along the outer
+    monitoring radius around the expected position of the target.
+
+    Note to devs:
     To grab the proper index value, we use the following formulas:
         xidx = 1*(params.deg-3) + 0
         yidx = 2*(params.deg-3) + 1
@@ -175,53 +177,222 @@ def cost_flight(x, target, finAng, params):
     We also have to add 1 for each increased dimension since the length of
     the polynomials is deg+1. The -3 comes from the predefined values of the
     initial point, speed, and heading, and the final speed and heading.
+
+    :param x: Optimization vector
+    :type x: np.ndarray
+    :param trgt: Expected 2D position of target at tf, (x, y)
+    :type trgt: np.ndarray
+    :param psif: Final heading angle
+    :type psif: float
+    :param params: Object containing the mission parameters
+    :type params: Parameters
+    :return: Cost of the current optimization iteration
+    :rtype: float
     """
     xidx = params.deg - 3
     yidx = 2*params.deg - 5
     xpos = x[xidx]
     ypos = x[yidx]
-    trgtX = target[0] + params.outerR*np.cos(finAng)
-    trgtY = target[1] + params.outerR*np.sin(finAng)
+    # Adding pi to psif since the heading angle points directly opposite the
+    # direction of the vector from the target to the random point along the
+    # outer monitoring radius
+    trgtX = trgt[0] + params.outerR*np.cos(psif+np.pi)
+    trgtY = trgt[1] + params.outerR*np.sin(psif+np.pi)
     val = np.linalg.norm([trgtX - xpos,
                           trgtY - ypos])
 
-    return val
+    return 1000*val
 
 
-def nonlinear_constraints(x, target, trajArray, trajDur, finAng, t0, params):
-    """ Nonlinear constraints for generating safe flight trajectories
-
-    Includes constraints for:
-        * Minimum temporal safe distance
-        * Maximum speed
-        * Maximum angular rate
+# TODO
+#   * Since the target trajectory object is created here and in the main
+#     function, pass it in here rather than create it in the cost each time
+def cost_m(x, trgt_cpts, p0, v0, psi0, dt, params):
+    """Cost function for the monitoring trajectory
     """
-    y = reshape(x, trajArray, params.nveh, params.deg, trajDur,
-                params.iniPt, params.iniSpeed, params.iniAng, params.monSpeed,
-                finAng)
-    trajs = build_traj_list(y, trajDur, t0, t0 + trajDur, params)
+    pt = Bezier(trgt_cpts, tf=dt)
+    y = reshape_m(x, p0, v0, psi0, dt, params.deg)
+    p = Bezier(y, tf=dt).elev(params.degElev)
+    pdot = p.diff()
 
-    nonlcon = np.concatenate([temporal_separation_cons(trajs, params),
-                              max_speed_cons(trajs[0], params),
-                              max_ang_rate_cons(trajs[0], params)
+    costPts = ((pt.y - p.y)*pdot.x - (pt.x - p.x)*pdot.y).normSquare().cpts
+
+#    if np.sign(sum(pdot*(pt-p)))
+
+    return 1000*sum(costPts.squeeze())
+
+
+@njit(cache=True)
+def reshape_f(x, p0, v0, vf, psi0, psif, dt, deg):
+    """Reshapes the optimization vector x into a usable matrix y
+
+    :param x: Optimization vector being reshaped
+    :type x: np.ndarray
+    :param p0: Initial 2D position of the agent, (x, y)
+    :type p0: np.ndarray
+    :param v0: Initial speed
+    :type v0: float
+    :param vf: Final speed
+    :type vf: float
+    :param psi0: Initial heading
+    :type psi0: float
+    :param psif: Final heading
+    :type psif: float
+    :param dt: Difference between final and initial time (i.e. tf - t0), used
+        for finding the magnitude of the vector between the first two control
+        points and between the last two control points
+    :type dt: float
+    :param deg: Degree of the Bernstein polynomials being used
+    :type deg: int
+    """
+    ndim = 2
+
+    # Reshape X
+    y = np.empty((ndim, deg+1))
+    reshapedX = x.reshape((ndim, -1))
+    y[:, 2:-2] = reshapedX[:, :-1]
+
+    # Initial and final points
+    y[0, 0] = p0[0]
+    y[1, 0] = p0[1]
+    y[:, -1] = reshapedX[:, -1]
+
+    # Initial and final speeds and headings
+    initMag = v0*dt/deg
+    y[0, 1] = p0[0] + initMag*np.cos(psi0)
+    y[1, 1] = p0[1] + initMag*np.sin(psi0)
+    finMag = vf*dt/deg
+    y[0, -2] = reshapedX[0, -1] - finMag*np.cos(psif)
+    y[1, -2] = reshapedX[1, -1] - finMag*np.sin(psif)
+
+    return y
+
+
+@njit(cache=True)
+def reshape_m(x, p0, v0, psi0, dt, deg):
+    """
+
+    NO FINAL PSI OR SPEED
+    """
+    ndim = 2
+
+    y = np.empty((ndim, deg+1))
+    reshapedX = x.reshape((ndim, -1))
+    y[:, 2:] = reshapedX
+
+    y[0, 0] = p0[0]
+    y[1, 0] = p0[1]
+
+    initMag = v0*dt/deg
+    y[0, 1] = p0[0] + initMag*np.cos(psi0)
+    y[1, 1] = p0[1] + initMag*np.sin(psi0)
+
+    return y
+
+
+def build_traj_list(cpts, times, ndim, nveh):
+    """Builds a trajectory list of Bernstein polynomial objects
+
+    :param cpts: Control points of the polynomials where the first m rows are
+        each dimension of the first trajectory. Following sets of m rows
+        correspond to each trajectory after the first one. The columns hold
+        each control point for the trajectories. There should be ndim*nveh
+        rows and deg+1 columns.
+    :type cpts: np.ndarray
+    :param times: Array of initial and final times for each trajectory. Each
+        row corresponds to each trajectory. The first column is t0 and the
+        second column is tf.
+    :type times: np.ndarray
+    :param ndim: Number of dimensions (e.g. 2D, 3D, etc.). Most likely 2 or 3.
+    :type ndim: int
+    :param nveh: Number of trajectories (vehicles)
+    :type nveh: int
+    :return: List of Bernstein polynomial objects (Bezier) corresponding to
+        each trajectory passed in.
+    :rtype: list(Bezier)
+    """
+    trajs = []
+    for i in range(nveh):
+        trajs.append(Bezier(cpts[i*ndim:(i+1)*ndim, :],
+                            t0=times[i, 0],
+                            tf=times[i, 1]))
+
+    return trajs
+
+
+def nonlinear_constraints_f(x, p0, v0, vf, psi0, psif, t0, tf,
+                            nveh, trgt_traj, pastCpts, pastTimes, params):
+    """Nonlinear constraints for the optimization problem
+    """
+    ndim = 2
+
+    dt = tf - t0
+    y = reshape_f(x, p0, v0, vf, psi0, psif, dt, params.deg)
+    if nveh > 0:
+        cpts = np.vstack((y, pastCpts))
+        times = np.vstack(([t0, tf], pastTimes))
+    else:
+        cpts = y
+        times = np.atleast_2d([t0, tf])
+
+    trajs = build_traj_list(cpts, times, ndim, nveh+1)
+
+    nonlcon = np.concatenate([temporal_sep_con(trajs, nveh, params),
+                              max_speed_con(trajs[0], params),
+                              min_speed_con(trajs[0], params),
+                              max_angrate_con(trajs[0], params),
+                              noflyzone_con(trajs[0], trgt_traj, params)
                               ])
 
     return nonlcon
 
 
-def temporal_separation_cons(trajs, params):
+# TODO
+#   * remove trgt and just have trgt_traj
+def nonlinear_constraints_m(x, p0, v0, vf, psi0, t0, tf,
+                            nveh, pastCpts, pastTimes, trgt, trgt_traj,
+                            params):
+    """Nonlinear constraints for the optimization problem
     """
-    """
-#    nveh = params.nveh
-    nveh = len(trajs)
+    ndim = 2
 
+    dt = tf - t0
+    y = reshape_m(x, p0, v0, psi0, dt, params.deg)
+    if nveh > 0:
+        cpts = np.vstack((y, pastCpts))
+        times = np.vstack(([t0, tf], pastTimes))
+    else:
+        cpts = y
+        times = np.atleast_2d([t0, tf])
+
+    trajs = build_traj_list(cpts, times, ndim, nveh+1)
+
+    nonlcon = np.concatenate([temporal_sep_con(trajs, nveh, params),
+                              max_speed_con(trajs[0], params),
+                              min_speed_con(trajs[0], params),
+                              max_angrate_con(trajs[0], params),
+                              final_pos_con(trajs[0], trgt, params),
+                              noflyzone_con(trajs[0], trgt_traj, params)
+                              ])
+
+    return nonlcon
+
+
+def temporal_sep_con(trajs, nveh, params):
+    """
+    """
     if nveh > 1:
         traj = trajs[0]
         distVeh = []
         for i, veh in enumerate(trajs[1:]):
             dv = traj - veh
             if dv is not None:
-                distVeh.append(dv.normSquare().elev(DEG_ELEV).cpts.squeeze())
+                distVeh.append(
+                        dv.normSquare().elev(params.degElev).cpts.squeeze())
+
+        # If no trajectories match in time, we don't need collision checking
+        if len(distVeh) == 0:
+            return np.atleast_1d(0.0)
 
         return np.concatenate(distVeh) - params.dsafe**2
 
@@ -229,36 +400,85 @@ def temporal_separation_cons(trajs, params):
         return np.atleast_1d(0.0)
 
 
-def max_speed_cons(traj, params):
-    """Creates the maximum velocity constraints.
+# TODO
+#   * Integrade the constraints so that the derivatives and degree elevations
+#     are only computed once rather than each function call
+def max_speed_con(traj, params):
+    """Computes the maximum speed constraints
 
-    Useful for limiting the maximum speed of a vehicle.
+    Used for limiting the maximum speed of a vehicle.
 
-    :param maxSpeed: Maximum speed of the vehicle.
-    :type maxSpeed: float
+    :param traj: Bernstein polynomial (Bezier) object of the position of the
+        vehicle
+    :type traj: Bezier
+    :param params: Mission parameters
+    :type params: Parameters
     :return: Inequality constraint for the maximum speed
     :rtype: float
     """
-    speedSqr = traj.diff().normSquare().elev(DEG_ELEV).cpts.squeeze()
+    speedSqr = traj.diff().normSquare().elev(params.degElev).cpts.squeeze()
 
     return params.vmax**2 - speedSqr
 
 
-def max_ang_rate_cons(traj, params):
+def min_speed_con(traj, params):
+    """Computes the minimum speed constraints
+
+    Used for limiting the minimum speed of a vehicle.
+
+    :param traj: Bernstein polynomial (Bezier) object of the position of the
+        vehicle
+    :type traj: Bezier
+    :param params: Mission parameters
+    :type params: Parameters
+    :return: Inequality constraint for the minimum speed
+    :rtype: float
+    """
+    speedSqr = traj.diff().normSquare().elev(params.degElev).cpts.squeeze()
+
+    return speedSqr - params.vmin**2
+
+
+def max_angrate_con(traj, params):
     """
     """
-    angRateSqr = angular_rate_sqr(traj.elev(DEG_ELEV)).cpts.squeeze()
+    angRateSqr = angular_rate_sqr(traj.elev(params.degElev)).cpts.squeeze()
 
     return params.wmax**2 - angRateSqr
 
 
-def angular_rate_sqr(traj):
+def noflyzone_con(traj, trgt_traj, params):
     """
-    Finds the squared angular rate of the 2D Bezier Curve.
+    """
+    p = traj.elev(params.degElev)
+    try:
+        dv = (p - trgt_traj).normSquare().cpts.squeeze()
+    except Exception as e:
+        print(p)
+        print(trgt_traj)
+        raise(e)
+
+    return dv - params.noflyR**2
+
+
+def final_pos_con(traj, trgt, params):
+    """
+    """
+    dist = np.linalg.norm(traj.cpts[:, -1] - trgt)
+
+    return [params.relaxation - np.abs(params.innerR - dist)]
+
+
+def angular_rate_sqr(traj):
+    """Finds the squared angular rate of a 2D Bezier Curve
 
     The equation for the angular rate is as follows:
         psiDot = ((yDdot*xDot - xDdot*yDot))^2 / (xDot^2 + yDot^2)^2
         Note the second derivative (Ddot) vs the first (Dot)
+
+    NOTE: If this function is causing issues in the optimization, it is likely
+    due to an initial speed of zero causing weirdness in the angular rate
+    calculation
 
     RETURNS:
         RationalBezier - This function returns a rational Bezier curve because
@@ -278,6 +498,45 @@ def angular_rate_sqr(traj):
     denominator = denominator*denominator
 
     cpts = np.nan_to_num(numerator.cpts / (denominator.cpts))
+#    cpts[np.abs(cpts) < 1e-9] = 0.0  # Added to get rid of very small values
     weights = denominator.cpts
 
-    return bez.RationalBezier(cpts, weights)
+    return RationalBezier(cpts, weights)
+
+
+if __name__ == '__main__':
+    deg = 5
+    dt = 10.0
+    p0 = np.array([0, 3], dtype=float)
+    v0 = 0.5
+    vf = 0.5
+    psi0 = 0.0
+    psif = 0.0
+    trgt = np.array([5, 9], dtype=float)
+
+    print('Testing reshape_f')
+    ytrue = np.array([[0, 1, 2, 3, 4, 5],
+                      [3, 3, 6, 2, 9, 9]], dtype=float)
+    x = np.array([2, 3, 5, 6, 2, 9])
+    y = reshape_f(x, p0, v0, vf, psi0, psif, dt, deg)
+    if not np.all(y == ytrue):
+        print('--> [!] Test failed')
+    else:
+        print('--> Test passed')
+
+    print('Testing init_guess_f')
+    x0true = np.array([2, 3, 5, 5, 7, 9], dtype=float)
+    x0 = init_guess_f(p0, trgt, v0, vf, psi0, psif, dt, deg)
+    if not np.all(x0 == x0true):
+        print('--> [!] Test failed')
+    else:
+        print('--> Test passed')
+
+    print('Testing init_guess_m')
+    x0true = np.array([], dtype=float)
+    x0 = init_guess_m(p0, trgt, v0, vf, psi0, dt, deg)
+
+    cpts1 = np.array([[0, 1, 2, 3, 4, 5],
+                      [3, 4, 6, 2, 7, 9]], dtype=float)
+    cpts2 = np.array([[5, 4, 3, 2, 1, 0],
+                      [8, 3, 6, 6, 2, 5]], dtype=float)
