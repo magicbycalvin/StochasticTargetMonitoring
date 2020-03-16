@@ -7,6 +7,7 @@ Created on Tue Mar 10 14:37:58 2020
 """
 
 import numpy as np
+from scipy.integrate import solve_ivp
 
 
 class Target:
@@ -67,7 +68,6 @@ class Target:
         """
         self._last_time = self.t
         self.t = t
-        self.update_state()
 
     def update_state(self):
         """ Updates the state of the agent
@@ -76,6 +76,15 @@ class Target:
         self.state[0] += dt*self.state[3]*np.cos(self.state[2])
         self.state[1] += dt*self.state[3]*np.sin(self.state[2])
         self.state[2] += dt*self.state[4]
+
+#        y0 = self.state[:3]
+#        v = self.state[3]
+#        w = self.state[4]
+#        def fn(t, x): return [v*np.cos(x[2]), v*np.sin(x[2]), w]
+#
+#        sol = solve_ivp(fn, (self._last_time, self.t), y0)
+#
+#        self.state[:3] = sol.y[:, -1].copy()
 
 
 #        dt = self.t - self._last_time

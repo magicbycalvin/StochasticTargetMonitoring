@@ -5,32 +5,34 @@ Created on Thu Mar 12 20:43:41 2020
 
 @author: ckielasjensen
 """
-
+import matplotlib.pyplot as plt
 from numba import njit
 import numpy as np
-from scipy.optimize import minimize
+from scipy.optimize import minimize, Bounds
 
 from bezier import Bezier, RationalBezier
 
 
-#DEG_ELEV = 30
-
-
 def plan_flight(p0, v0, psi0, t0, trgt, trgt_cpts, pastCpts, pastTimes, params,
-                dt=None):
+                tf=None):
     """
     """
+    randomizer = 0
     while True:
         ndim = 2
         vf = params.monSpeed
         psif = 2*np.pi*np.random.rand()
-        if dt is None:
-            dt = params.tflight
-        tf = t0 + dt
-        nveh = pastCpts.shape[0] // ndim
-        trgt_traj = Bezier(trgt_cpts, t0=t0, tf=t0+dt)
+        if tf is None:
+            tf = t0 + params.tflight
+        dt = tf - t0
+        assert dt >= 0, f'dt should be >= 0, t0: {t0}, tf: {tf}'
 
+        nveh = pastCpts.shape[0] // ndim
+        trgt_traj = Bezier(trgt_cpts, t0=t0, tf=tf)
+
+        bounds = Bounds(min(p0) - 250, max(p0) + 250)
         x0 = init_guess_f(p0, trgt, v0, vf, psi0, psif, dt, params.deg)
+        x0 += np.random.randn()*randomizer
         def fn(x): return cost_f(x, trgt, psif, params)
         cons = [{'type': 'ineq',
                  'fun': lambda x: nonlinear_constraints_f(x, p0, v0, vf, psi0,
@@ -41,6 +43,7 @@ def plan_flight(p0, v0, psi0, t0, trgt, trgt_cpts, pastCpts, pastTimes, params,
 
         results = minimize(fn, x0,
                            constraints=cons,
+                           bounds=bounds,
                            method='SLSQP',
                            options={'maxiter': 250,
                                     'disp': True,
@@ -52,7 +55,26 @@ def plan_flight(p0, v0, psi0, t0, trgt, trgt_cpts, pastCpts, pastTimes, params,
             print(f'Psif: {psif}')
             print(f'Cost: {fn(results.x)}')
             print(f'Nonlcon:')
-            print(cons[0]['fun'](results.x) < 0)
+            temp = cons[0]['fun'](results.x)
+            names = iter(['sep', 'max', 'min', 'max ang', 'NFZ'])
+            print(next(names))
+            for val in temp:
+                if val == 99999:
+                    print('###')
+                    print(next(names))
+                else:
+                    print(np.round(val, 3), end=', ')
+            print()
+            randomizer += 1
+
+#            y = reshape_f(results.x, p0, v0, vf, psi0, psif, dt, params.deg)
+#            newTraj = Bezier(y, t0=t0, tf=tf)
+#
+#            newTraj.plot()
+#            plt.title('Trajectory')
+#            newTraj.diff().normSquare().elev(params.degElev).plot()
+#            plt.title('Norm Square')
+#            0/0
 
         y = reshape_f(results.x, p0, v0, vf, psi0, psif, dt, params.deg)
         newTraj = Bezier(y, t0=t0, tf=tf)
@@ -63,7 +85,7 @@ def plan_flight(p0, v0, psi0, t0, trgt, trgt_cpts, pastCpts, pastTimes, params,
     return newTraj
 
 
-def plan_mon(p0, v0, psi0, t0, trgt_cpts, pastCpts, pastTimes, dt, params):
+def plan_mon(p0, v0, psi0, t0, trgt_cpts, pastCpts, pastTimes, tf, params):
     """
 
     MON CONSTRAINTS:
@@ -72,10 +94,12 @@ def plan_mon(p0, v0, psi0, t0, trgt_cpts, pastCpts, pastTimes, dt, params):
     """
     ndim = 2
     vf = params.monSpeed
-    tf = t0 + dt
     nveh = pastCpts.shape[0] // ndim
     trgt = trgt_cpts[:, -1]
-    trgt_traj = Bezier(trgt_cpts, t0=t0, tf=t0+dt)
+    trgt_traj = Bezier(trgt_cpts, t0=t0, tf=tf)
+
+    dt = tf - t0
+    assert dt >= 0, f'dt should be >= 0, t0: {t0}, tf: {tf}'
 
     x0 = init_guess_m(p0, trgt, v0, vf, psi0, dt, params.deg)
     def fn(x): return cost_m(x, trgt_cpts, p0, v0, psi0, dt, params)
@@ -201,7 +225,7 @@ def cost_f(x, trgt, psif, params):
     val = np.linalg.norm([trgtX - xpos,
                           trgtY - ypos])
 
-    return 1000*val
+    return val
 
 
 # TODO
@@ -219,7 +243,7 @@ def cost_m(x, trgt_cpts, p0, v0, psi0, dt, params):
 
 #    if np.sign(sum(pdot*(pt-p)))
 
-    return 1000*sum(costPts.squeeze())
+    return sum(costPts.squeeze())
 
 
 @njit(cache=True)
@@ -338,9 +362,13 @@ def nonlinear_constraints_f(x, p0, v0, vf, psi0, psif, t0, tf,
     trajs = build_traj_list(cpts, times, ndim, nveh+1)
 
     nonlcon = np.concatenate([temporal_sep_con(trajs, nveh, params),
+                              [99999],
                               max_speed_con(trajs[0], params),
+                              [99999],
                               min_speed_con(trajs[0], params),
+                              [99999],
                               max_angrate_con(trajs[0], params),
+                              [99999],
                               noflyzone_con(trajs[0], trgt_traj, params)
                               ])
 
@@ -434,6 +462,12 @@ def min_speed_con(traj, params):
     :return: Inequality constraint for the minimum speed
     :rtype: float
     """
+#    temp = traj.diff().normSquare().elev(params.degElev)
+#    i = 1
+#    while np.any(temp.cpts.squeeze() < 0):
+#        print(f'Deg Elev: {i}')
+#        temp = temp.elev(10)
+#    speedSqr = temp.cpts.squeeze()
     speedSqr = traj.diff().normSquare().elev(params.degElev).cpts.squeeze()
 
     return speedSqr - params.vmin**2
