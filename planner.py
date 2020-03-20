@@ -135,6 +135,9 @@ def plan_mon(p0, v0, psi0, t0, trgt_cpts, pastCpts, pastTimes, tf, params):
     y = reshape_m(results.x, p0, v0, psi0, dt, params.deg)
     newTraj = Bezier(y, t0=t0, tf=tf)
 
+    if not results.success:
+        print('---> MON UNSUCCESSFUL!')
+
     return newTraj
 
 

@@ -50,8 +50,11 @@ def plot1():
                   label='Outer Radius', radius=params.outerR)
     cir2 = Circle(target.get_state()[:2], ls=':', fill=False, ec='r',
                   label='Outer Radius', radius=params.innerR)
+    cir3 = Circle(target.get_state()[:2], lw=None, fc='gray', alpha=0.5,
+                  label='No Fly Zone', radius=params.noflyR)
     ax.add_artist(cir1)
     ax.add_artist(cir2)
+    ax.add_artist(cir3)
 
     # Draw legend and clean up Agent class
     ax.legend()
@@ -119,8 +122,11 @@ def plot2():
                   label='Outer Radius', radius=params.outerR)
     cir2 = Circle(target.get_state()[:2], ls=':', fill=False, ec='r',
                   label='Inner Radius', radius=params.innerR)
+    cir3 = Circle(target.get_state()[:2], lw=None, fc='gray', alpha=0.5,
+                  label='No Fly Zone', radius=params.noflyR)
     ax.add_artist(cir1)
     ax.add_artist(cir2)
+    ax.add_artist(cir3)
 
     ax.legend()
     Agent.agentIdx = 0

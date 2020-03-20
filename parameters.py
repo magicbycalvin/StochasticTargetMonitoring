@@ -22,9 +22,9 @@ class Parameters:
         self.monSpeed = 3.0
 
         # Target constraints
-        self.outerR = 125
-        self.innerR = 50
-        self.noflyR = 10
+        self.outerR = 75
+        self.innerR = 30
+        self.noflyR = 5
         self.detPer = 1     # Detection period of the target (s)
 
         # Optimization constraints
@@ -34,7 +34,7 @@ class Parameters:
         self.tmon = 10.0    # Monitoring traj time (s)
 
         # Misc
-        np.random.seed(0)
+        np.random.seed(1)
         self.iprint = 0     # Verbosity of minimizer output (0, 1, or 2)
         self.relaxation = 1e-3  # Relaxation for final mon point and inner R
         self.replanRad = 5  # If Ept is this different, replan
