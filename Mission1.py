@@ -39,17 +39,15 @@ def plot1():
     # Plot initial states
     pts = target.get_state()
     trgtPlot = ax.plot(pts[0], pts[1], 'r*', markersize=10, label='Target')
-    agentPlots = []
+#    agentPlots = []
     for i, agent in enumerate(agents):
-        pts = agent.get_state()
-        agentPlots.append(ax.plot(pts[0], pts[1], f'{Agent.colors[i]}X',
-                                  label=f'Agent {i}'))
+        agent.plot_arrow()
 
     # Plot the inner and outer radii
     cir1 = Circle(target.get_state()[:2], ls=':', fill=False, ec='r',
                   label='Outer Radius', radius=params.outerR)
     cir2 = Circle(target.get_state()[:2], ls=':', fill=False, ec='r',
-                  label='Outer Radius', radius=params.innerR)
+                  label='Inner Radius', radius=params.innerR)
     cir3 = Circle(target.get_state()[:2], lw=None, fc='gray', alpha=0.5,
                   label='No Fly Zone', radius=params.noflyR)
     ax.add_artist(cir1)
@@ -57,7 +55,11 @@ def plot1():
     ax.add_artist(cir3)
 
     # Draw legend and clean up Agent class
-    ax.legend()
+    ax.legend([trgtPlot[0]] + [agent._arrow for agent in agents],
+              ['Target',
+               'Agent 1',
+               'Agent 2',
+               'Agent 3'])
     Agent.agentIdx = 0
     Agent.trajList = []
     Agent.timeList = []
@@ -90,11 +92,8 @@ def plot2():
     # Plot initial states
     pts = target.get_state()
     trgtPlot = ax.plot(pts[0], pts[1], 'r*', markersize=10, label='Target')
-    agentPlots = []
     for i, agent in enumerate(agents):
-        pts = agent.get_state()
-        agentPlots.append(ax.plot(pts[0], pts[1], f'{Agent.colors[i]}X',
-                                  label=f'Agent {i}'))
+        agent.plot_arrow()
 
     # Run the simulation
     for t in np.arange(0, params.tflight + params.nveh*params.tmon + 0.1, 0.1):
@@ -112,9 +111,9 @@ def plot2():
         pts = target.get_state()
         trgtPlot[0].set_data(pts[0], pts[1])
         for i, agent in enumerate(agents):
-            pts = agent.get_state()
-            agentPlots[i][0].set_data(pts[0], pts[1])
+            agent.plot_arrow()
 
+        fig.canvas.draw()
         plt.pause(0.01)
 
     # Plot the inner and outer radii
@@ -128,7 +127,11 @@ def plot2():
     ax.add_artist(cir2)
     ax.add_artist(cir3)
 
-    ax.legend()
+    ax.legend([trgtPlot[0]] + [agent._arrow for agent in agents],
+              ['Target',
+               'Agent 1',
+               'Agent 2',
+               'Agent 3'])
     Agent.agentIdx = 0
     Agent.trajList = []
     Agent.timeList = []

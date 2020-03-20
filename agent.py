@@ -59,6 +59,7 @@ class Agent:
         self._last_trgt = None
         self._flight_plot = None
         self._mon_plot = None
+        self._arrow = None
 
     # TODO
     #   * Fix the dt=None since it is a messy workaround for adding differently
@@ -311,6 +312,24 @@ class Agent:
         else:
             self.state[4] = ((xdot(t)*yddot(t) - xddot(t)*ydot(t)) /
                              trajDotNormSqr)
+
+    def plot_arrow(self):
+        """
+        """
+        if self._ax is not None:
+            if self._arrow is not None:
+                self._arrow.remove()
+
+            x = self.state[0]
+            y = self.state[1]
+            dx = 3*np.cos(self.state[2])
+            dy = 3*np.sin(self.state[2])
+            self._arrow = self._ax.arrow(x, y, dx, dy,
+                                         fc=Agent.colors[self.idx],
+                                         ec='k',
+                                         lw=1.5,
+                                         width=0.75,
+                                         zorder=100)
 
     def get_traj_cmd(self):
         """ Gets the current trajectory command
