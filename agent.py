@@ -67,6 +67,7 @@ class Agent:
         """ Plans the flight trajectory
         """
         print(f'Agent {self.idx} computing flight')
+        self._traj_state = 'flight'
 
         # Grab states
         p0 = self.state[:2]
@@ -74,25 +75,11 @@ class Agent:
         psi0 = self.state[2]
         t0 = self.t
         try:
-#            cptsf = [val for key, val in Agent.flightTrajDict.items() if
-#                     self.idx is not key]
-#            timesf = [val for key, val in Agent.flightTimesDict.items() if
-#                      self.idx is not key]
-#            cptsm = [val for key, val in Agent.monTrajDict.items() if
-#                     self.idx is not key]
-#            timesm = [val for key, val in Agent.monTimesDict.items() if
-#                      self.idx is not key]
-#            pastCpts = np.vstack([cptsf, cptsm])
-#            pastTimes = np.vstack([timesf, timesm])
             pastCpts = np.vstack(Agent.trajList)
             pastTimes = np.vstack(Agent.timeList)
         except ValueError:
             pastCpts = np.atleast_2d([])
             pastTimes = np.atleast_2d([])
-
-#        if pastCpts.shape[1] == 0:
-#            pastCpts = np.atleast_2d([])
-#            pastTimes = np.atleast_2d([])
 
         if tf is None:
             tf = t0 + self.params.tflight
@@ -112,7 +99,6 @@ class Agent:
         self.flightTrajIdx = len(Agent.trajList) - 1
 #        Agent.flightTrajDict[self.idx] = flight_traj.cpts.squeeze()
 #        Agent.flightTimesDict[self.idx] = [flight_traj.t0, flight_traj.tf]
-        self._traj_state = 'flight'
 
         # If we have an axis, plot the new trajectory
         if self._ax is not None:
@@ -132,6 +118,7 @@ class Agent:
         """ Plans the monitoring trajectory
         """
         print(f'Agent {self.idx} computing mon')
+        self._traj_state = 'mon'
 
         # Grab states
         pdot = self.flight_traj.diff()
@@ -140,25 +127,11 @@ class Agent:
         psi0 = np.arctan2(pdot.cpts[1, -1], pdot.cpts[0, -1])
         t0 = self.flight_traj.tf
         try:
-#            cptsf = [val for key, val in Agent.flightTrajDict.items() if
-#                     self.idx is not key]
-#            timesf = [val for key, val in Agent.flightTimesDict.items() if
-#                      self.idx is not key]
-#            cptsm = [val for key, val in Agent.monTrajDict.items() if
-#                     self.idx is not key]
-#            timesm = [val for key, val in Agent.monTimesDict.items() if
-#                      self.idx is not key]
-#            pastCpts = np.vstack([cptsf, cptsm])
-#            pastTimes = np.vstack([timesf, timesm])
             pastCpts = np.vstack(Agent.trajList)
             pastTimes = np.vstack(Agent.timeList)
         except ValueError:
             pastCpts = np.atleast_2d([])
             pastTimes = np.atleast_2d([])
-
-#        if pastCpts.shape[1] == 0:
-#            pastCpts = np.atleast_2d([])
-#            pastTimes = np.atleast_2d([])
 
         if tf is None:
             tf = t0 + self.params.tmon
@@ -177,7 +150,6 @@ class Agent:
         Agent.timeList.append([mon_traj.t0, mon_traj.tf])
 #        Agent.monTrajDict[self.idx] = mon_traj.cpts.squeeze()
 #        Agent.monTimesDict[self.idx] = [mon_traj.t0, mon_traj.tf]
-        self._traj_state = 'mon'
 
         # If we have an axis, plot the new trajectory
         if self._ax is not None:
@@ -266,39 +238,6 @@ class Agent:
         """
         return np.copy(self.state)
 
-#    def send_trajectories(self, idx, trajectories):
-#        """ Sends one agent's trajectories to the current agent
-#
-#        :param idx: Index of the agent whose trajectories are being sent
-#        :type idx: int
-#        :param trajectories: Dict containing the monitoring trajectory and
-#            flight trajectory of the agent. The trajectories should be Bezier
-#            objects and the dictionary entries should be 'mon_traj' and
-#            'flight_traj'
-#        :type trajectories: dict
-#        """
-#        self._traj_list[idx] = trajectories.copy()
-
-#    def send_traj(self, traj, times):
-#        """ Sends an existing agent's trajectory to the current agent
-#
-#        :param traj: Matrix of control points defining the trajectory where
-#            each row corresponds to the dimension and the columns correspond
-#            to the control points
-#        :type traj: np.ndarray
-#        :param times: Vector containing t0 and tf, [t0, tf]
-#        :type times: np.ndarray
-#        """
-#        if self._traj_list.shape[1] > 0:
-#            self._traj_list = np.vstack((self._traj_list, traj))
-#        else:
-#            self._traj_list = traj.copy()
-#
-#        if self._time_list.shape[1] > 0:
-#            self._time_list = np.vstack((self._time_list, times))
-#        else:
-#            self._time_list = np.atleast_2d(times.copy())
-
     def update(self, t):
         """ Updates the time and then state of the agent
 
@@ -386,10 +325,8 @@ class Agent:
         # TODO put this in a try catch so that we still raise if we try to
         # get something uninitialized
         if self.t >= self.flight_traj.t0 and self.t <= self.flight_traj.tf:
-            self._traj_state = 'flight'
             return self.flight_traj
         elif self.t > self.mon_traj.t0 and self.t <= self.mon_traj.tf:
-            self._traj_state = 'mon'
             return self.mon_traj
         else:
             # TODO
