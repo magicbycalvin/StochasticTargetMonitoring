@@ -29,7 +29,7 @@ def plot1():
         agents.append(Agent(0, 25*i, 0, params.monSpeed, 0, params, ax=ax))
 
     # Give the target a commanded speed
-    target.send_cmd(0, 0)
+    target.send_cmd(3, 0)
 
     # Get first plan
     for i, agent in enumerate(agents):
@@ -47,8 +47,11 @@ def plot1():
                   label='Outer Radius', radius=params.outerR)
     cir2 = Circle(target.get_state()[:2], ls=':', fill=False, ec='r',
                   label='Outer Radius', radius=params.innerR)
+    cir3 = Circle(target.get_state()[:2], lw=None, fc='gray', alpha=0.5,
+                  label='No Fly Zone', radius=params.noflyR)
     ax.add_artist(cir1)
     ax.add_artist(cir2)
+    ax.add_artist(cir3)
 
     # Draw legend and clean up Agent class
     ax.legend([trgtPlot[0]] + [agent._arrow for agent in agents],
@@ -67,8 +70,8 @@ def plot1():
 def plot2():
     fig, ax = plt.subplots()
     ax.set_aspect('equal')
-    ax.set_xlim(100, 350)
-    ax.set_ylim(-75, 110)
+    ax.set_xlim(50, 250)
+    ax.set_ylim(50, 250)
 
     # Initialize classes
     params = Parameters()
@@ -78,7 +81,7 @@ def plot2():
         agents.append(Agent(0, 25*i, 0, params.monSpeed, 0, params, ax=ax))
 
     # Give the target a commanded speed
-    target.send_cmd(0, 0)
+    target.send_cmd(3, 0)
 
     # Get first plan
     for i, agent in enumerate(agents):
@@ -111,6 +114,8 @@ def plot2():
             agent.plot_arrow()
 
         if t >= 1:
+            target.send_cmd(3, np.pi/2)
+        if t >= 1.5:
             target.send_cmd(3, 0)
 
         plt.pause(0.01)
@@ -120,8 +125,11 @@ def plot2():
                   label='Outer Radius', radius=params.outerR)
     cir2 = Circle(target.get_state()[:2], ls=':', fill=False, ec='r',
                   label='Inner Radius', radius=params.innerR)
+    cir3 = Circle(target.get_state()[:2], lw=None, fc='gray', alpha=0.5,
+                  label='No Fly Zone', radius=params.noflyR)
     ax.add_artist(cir1)
     ax.add_artist(cir2)
+    ax.add_artist(cir3)
 
     # Draw legend and clean up Agent class
     ax.legend([trgtPlot[0]] + [agent._arrow for agent in agents],
