@@ -6,11 +6,13 @@ Created on Thu Mar 12 20:43:41 2020
 @author: ckielasjensen
 """
 import matplotlib.pyplot as plt
+from matplotlib.patches import Circle
 from numba import njit
 import numpy as np
 from scipy.optimize import minimize, Bounds
 
 from bezier import Bezier, RationalBezier
+from parameters import Parameters
 
 
 def plan_flight(p0, v0, psi0, t0, trgt, trgt_cpts, pastCpts, pastTimes, params,
@@ -117,7 +119,7 @@ def plan_mon(p0, v0, psi0, t0, trgt_cpts, pastCpts, pastTimes, tf, params):
     dt = tf - t0
     assert dt >= 0, f'dt should be >= 0, t0: {t0}, tf: {tf}'
 
-    x0 = init_guess_m(p0, trgt, v0, vf, psi0, dt, params.deg)
+    x0 = init_guess_m(p0, trgt, v0, vf, psi0, dt, params.deg, params)
     def fn(x): return cost_m(x, trgt_cpts, p0, v0, psi0, dt, params)
     cons = [{'type': 'ineq',
              'fun': lambda x: nonlinear_constraints_m(x, p0, v0, vf, psi0,
@@ -132,7 +134,7 @@ def plan_mon(p0, v0, psi0, t0, trgt_cpts, pastCpts, pastTimes, tf, params):
                                 'disp': True,
                                 'iprint': params.iprint})
 
-    y = reshape_m(results.x, p0, v0, psi0, dt, params.deg)
+    y = reshape_m(results.x, p0, v0, psi0, dt, params.deg, trgt, params.innerR)
     newTraj = Bezier(y, t0=t0, tf=tf)
 
     if not results.success:
@@ -184,7 +186,27 @@ def init_guess_f(p0, trgt, v0, vf, psi0, psif, dt, deg):
     return x0
 
 
-def init_guess_m(p0, trgt, v0, vf, psi0, dt, deg):
+#def init_guess_m(p0, trgt, v0, vf, psi0, dt, deg):
+#    """
+#    """
+#    initMag = v0*dt/deg
+#    x1 = p0[0] + initMag*np.cos(psi0)
+#    y1 = p0[1] + initMag*np.sin(psi0)
+#
+#    psif = np.arctan2(trgt[1]-y1, trgt[0]-x1)
+#    finalMag = vf*dt/deg
+#    xn = trgt[0] - finalMag*np.cos(psif)
+#    yn = trgt[1] - finalMag*np.sin(psif)
+#
+#    xguess = np.linspace(x1, xn, deg)[1:]
+#    yguess = np.linspace(y1, yn, deg)[1:]
+#
+#    x0 = np.concatenate((xguess, yguess))
+#
+#    return x0
+
+
+def init_guess_m(p0, trgt, v0, vf, psi0, dt, deg, params):
     """
     """
     initMag = v0*dt/deg
@@ -193,13 +215,15 @@ def init_guess_m(p0, trgt, v0, vf, psi0, dt, deg):
 
     psif = np.arctan2(trgt[1]-y1, trgt[0]-x1)
     finalMag = vf*dt/deg
-    xn = trgt[0] - finalMag*np.cos(psif)
-    yn = trgt[1] - finalMag*np.sin(psif)
+    xn = trgt[0] - params.innerR*np.cos(psif)
+    yn = trgt[1] - params.innerR*np.sin(psif)
+    xn_1 = xn - finalMag*np.cos(psif)
+    yn_1 = yn - finalMag*np.sin(psif)
 
-    xguess = np.linspace(x1, xn, deg)[1:]
-    yguess = np.linspace(y1, yn, deg)[1:]
+    xguess = np.linspace(x1, xn_1, deg-1)[1:-1]
+    yguess = np.linspace(y1, yn_1, deg-1)[1:-1]
 
-    x0 = np.concatenate((xguess, yguess))
+    x0 = np.concatenate((xguess, yguess, [vf, psif]))
 
     return x0
 
@@ -267,9 +291,13 @@ def cost_m(x, trgt_cpts, p0, v0, psi0, dt, params):
     """Cost function for the monitoring trajectory
     """
     pt = Bezier(trgt_cpts, tf=dt)
-    y = reshape_m(x, p0, v0, psi0, dt, params.deg)
+    y = reshape_m(x, p0, v0, psi0, dt, params.deg, trgt_cpts[:, -1],
+                  params.innerR)
     p = Bezier(y, tf=dt).elev(params.degElev)
     pdot = p.diff()
+
+#    if np.any((pdot*(pt-p)).cpts < 0):
+#        return 99999
 
     costPts = ((pt.y - p.y)*pdot.x - (pt.x - p.x)*pdot.y).normSquare().cpts
 
@@ -324,24 +352,58 @@ def reshape_f(x, p0, v0, vf, psi0, psif, dt, deg):
     return y
 
 
+#@njit(cache=True)
+#def reshape_m(x, p0, v0, psi0, dt, deg):
+#    """
+#
+#    NO FINAL PSI OR SPEED
+#    """
+#    ndim = 2
+#
+#    y = np.empty((ndim, deg+1))
+#    reshapedX = x.reshape((ndim, -1))
+#    y[:, 2:] = reshapedX
+#
+#    y[0, 0] = p0[0]
+#    y[1, 0] = p0[1]
+#
+#    initMag = v0*dt/deg
+#    y[0, 1] = p0[0] + initMag*np.cos(psi0)
+#    y[1, 1] = p0[1] + initMag*np.sin(psi0)
+#
+#    return y
 @njit(cache=True)
-def reshape_m(x, p0, v0, psi0, dt, deg):
+def reshape_m(x, p0, v0, psi0, dt, deg, trgt, innerR):
     """
-
-    NO FINAL PSI OR SPEED
     """
     ndim = 2
-
+    vf = x[-2]
+    psif = x[-1]
     y = np.empty((ndim, deg+1))
-    reshapedX = x.reshape((ndim, -1))
-    y[:, 2:] = reshapedX
+
+    pf = np.empty(2)
+    pf[0] = trgt[0] + innerR*np.cos(np.pi + psif)
+    pf[1] = trgt[1] + innerR*np.sin(np.pi + psif)
+
+#    reshapedX = x.reshape((ndim, -1))
+#    y[:, 2:] = reshapedX
+
+    y[0, 2:-2] = x[:deg-3]
+    y[1, 2:-2] = x[deg-3: 2*(deg-3)]
 
     y[0, 0] = p0[0]
     y[1, 0] = p0[1]
 
+    y[0, -1] = pf[0]
+    y[1, -1] = pf[1]
+
     initMag = v0*dt/deg
     y[0, 1] = p0[0] + initMag*np.cos(psi0)
     y[1, 1] = p0[1] + initMag*np.sin(psi0)
+
+    finalMag = vf*dt/deg
+    y[0, -2] = pf[0] + finalMag*np.cos(np.pi + psif)
+    y[1, -2] = pf[1] + finalMag*np.sin(np.pi + psif)
 
     return y
 
@@ -417,7 +479,7 @@ def nonlinear_constraints_m(x, p0, v0, vf, psi0, t0, tf,
     ndim = 2
 
     dt = tf - t0
-    y = reshape_m(x, p0, v0, psi0, dt, params.deg)
+    y = reshape_m(x, p0, v0, psi0, dt, params.deg, trgt, params.innerR)
     if nveh > 0:
         cpts = np.vstack((y, pastCpts))
         times = np.vstack(([t0, tf], pastTimes))
@@ -621,7 +683,8 @@ if __name__ == '__main__':
     vf = 0.5
     psi0 = 0.0
     psif = 0.0
-    trgt = np.array([5, 9], dtype=float)
+    trgt = np.array([50, 3], dtype=float)
+    params = Parameters()
 
     print('Testing reshape_f')
     ytrue = np.array([[0, 1, 2, 3, 4, 5],
@@ -643,9 +706,14 @@ if __name__ == '__main__':
 
     print('Testing init_guess_m')
     x0true = np.array([], dtype=float)
-    x0 = init_guess_m(p0, trgt, v0, vf, psi0, dt, deg)
+    x0 = init_guess_m(p0, trgt, v0, vf, psi0, dt, deg, params)
 
-    cpts1 = np.array([[0, 1, 2, 3, 4, 5],
-                      [3, 4, 6, 2, 7, 9]], dtype=float)
-    cpts2 = np.array([[5, 4, 3, 2, 1, 0],
-                      [8, 3, 6, 6, 2, 5]], dtype=float)
+    c = Bezier(reshape_m(x0, p0, v0, psi0, dt, deg, trgt, params.innerR))
+    ax = c.plot()
+    ax.add_artist(Circle(trgt, radius=params.innerR, fill=None))
+    ax.set_aspect('equal')
+
+#    cpts1 = np.array([[0, 1, 2, 3, 4, 5],
+#                      [3, 4, 6, 2, 7, 9]], dtype=float)
+#    cpts2 = np.array([[5, 4, 3, 2, 1, 0],
+#                      [8, 3, 6, 6, 2, 5]], dtype=float)

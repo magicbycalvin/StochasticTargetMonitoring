@@ -138,7 +138,7 @@ def plot2():
 
 
 def main():
-    plot1()
+#    plot1()
     plot2()
 
 
