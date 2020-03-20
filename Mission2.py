@@ -39,11 +39,8 @@ def plot1():
     # Plot initial states
     pts = target.get_state()
     trgtPlot = ax.plot(pts[0], pts[1], 'r*', markersize=10, label='Target')
-    agentPlots = []
     for i, agent in enumerate(agents):
-        pts = agent.get_state()
-        agentPlots.append(ax.plot(pts[0], pts[1], f'{Agent.colors[i]}X',
-                                  label=f'Agent {i}'))
+        agent.plot_arrow()
 
     # Plot the inner and outer radii
     cir1 = Circle(target.get_state()[:2], ls=':', fill=False, ec='r',
@@ -54,7 +51,11 @@ def plot1():
     ax.add_artist(cir2)
 
     # Draw legend and clean up Agent class
-    ax.legend()
+    ax.legend([trgtPlot[0]] + [agent._arrow for agent in agents],
+              ['Target',
+               'Agent 1',
+               'Agent 2',
+               'Agent 3'])
     Agent.agentIdx = 0
     Agent.trajList = []
     Agent.timeList = []
@@ -83,15 +84,13 @@ def plot2():
     for i, agent in enumerate(agents):
         agent.detect_target(target.get_state())
         agent.compute_flight_traj(tf=params.tflight + i*params.tmon)
+        agent.plot_arrow()
 
     # Plot initial states
     pts = target.get_state()
     trgtPlot = ax.plot(pts[0], pts[1], 'r*', markersize=10, label='Target')
-    agentPlots = []
     for i, agent in enumerate(agents):
-        pts = agent.get_state()
-        agentPlots.append(ax.plot(pts[0], pts[1], f'{Agent.colors[i]}X',
-                                  label=f'Agent {i}'))
+        agent.plot_arrow()
 
     # Run the simulation
     for t in np.arange(0, params.tflight + params.nveh*params.tmon + 0.1, 0.1):
@@ -109,8 +108,7 @@ def plot2():
         pts = target.get_state()
         trgtPlot[0].set_data(pts[0], pts[1])
         for i, agent in enumerate(agents):
-            pts = agent.get_state()
-            agentPlots[i][0].set_data(pts[0], pts[1])
+            agent.plot_arrow()
 
         if t >= 1:
             target.send_cmd(3, 0)
@@ -125,7 +123,12 @@ def plot2():
     ax.add_artist(cir1)
     ax.add_artist(cir2)
 
-    ax.legend()
+    # Draw legend and clean up Agent class
+    ax.legend([trgtPlot[0]] + [agent._arrow for agent in agents],
+              ['Target',
+               'Agent 1',
+               'Agent 2',
+               'Agent 3'])
     Agent.agentIdx = 0
     Agent.trajList = []
     Agent.timeList = []
@@ -135,7 +138,7 @@ def plot2():
 
 
 def main():
-#    plot1()
+    plot1()
     plot2()
 
 
