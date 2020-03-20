@@ -7,6 +7,7 @@ Created on Fri Mar 20 05:21:27 2020
 """
 
 import matplotlib.pyplot as plt
+from matplotlib.patches import Circle
 import numpy as np
 
 from agent import Agent
@@ -44,7 +45,7 @@ class Parameters:
         self.replanRad = 5  # If Ept is this different, replan
 
 
-def main():
+def plot1():
     fig, ax = plt.subplots()
     ax.set_aspect('equal')
     ax.set_xlim(-15, 110)
@@ -73,10 +74,56 @@ def main():
         pts = agent.get_state()
         agentPlots.append(ax.plot(pts[0], pts[1], f'{Agent.colors[i]}X',
                                   label=f'Agent {i}'))
+
+    # Plot the inner and outer radii
+    cir1 = Circle(target.get_state()[:2], ls=':', fill=False, ec='r',
+                  label='Outer Radius', radius=params.outerR)
+    cir2 = Circle(target.get_state()[:2], ls=':', fill=False, ec='r',
+                  label='Outer Radius', radius=params.innerR)
+    ax.add_artist(cir1)
+    ax.add_artist(cir2)
+
+    # Draw legend and clean up Agent class
     ax.legend()
+    Agent.agentIdx = 0
+    Agent.trajList = []
+    Agent.timeList = []
+    return
+
+
+def plot2():
+    fig, ax = plt.subplots()
+    ax.set_aspect('equal')
+    ax.set_xlim(-15, 110)
+    ax.set_ylim(-15, 110)
+
+    # Initialize classes
+    params = Parameters()
+    target = Target(25, 25, 0)
+    agents = []
+    for i in range(params.nveh):
+        agents.append(Agent(0, 25*i, 0, params.monSpeed, 0, params, ax=ax))
+
+    # Give the target a commanded speed
+    target.send_cmd(0, 0)
+
+    # Get first plan
+    for i, agent in enumerate(agents):
+        agent.detect_target(target.get_state())
+        agent.compute_flight_traj(tf=params.tflight + i*params.tmon)
+
+    # Plot initial states
+    pts = target.get_state()
+    trgtPlot = ax.plot(pts[0], pts[1], 'r*', markersize=10, label='Target')
+    agentPlots = []
+    for i, agent in enumerate(agents):
+        pts = agent.get_state()
+        agentPlots.append(ax.plot(pts[0], pts[1], f'{Agent.colors[i]}X',
+                                  label=f'Agent {i}'))
 
     # Run the simulation
-    for t in np.arange(0, 60.1, 0.1):
+    for t in np.arange(0, params.tflight + params.nveh*params.tmon + 0.1, 0.1):
+        print(t)
         # Update states
         target.update(t)
         for agent in agents:
@@ -95,10 +142,24 @@ def main():
             agentPlots[i][0].set_data(pts[0], pts[1])
         plt.pause(0.001)
 
+    # Plot the inner and outer radii
+    cir1 = Circle(target.get_state()[:2], ls=':', fill=False, ec='r',
+                  label='Outer Radius', radius=params.outerR)
+    cir2 = Circle(target.get_state()[:2], ls=':', fill=False, ec='r',
+                  label='Outer Radius', radius=params.innerR)
+    ax.add_artist(cir1)
+    ax.add_artist(cir2)
+
+    ax.legend()
     Agent.agentIdx = 0
     Agent.trajList = []
     Agent.timeList = []
     return
+
+
+def main():
+    plot1()
+    plot2()
 
 
 if __name__ == '__main__':
