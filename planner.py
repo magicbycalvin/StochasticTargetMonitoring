@@ -33,7 +33,8 @@ def plan_flight(p0, v0, psi0, t0, trgt, trgt_cpts, pastCpts, pastTimes, params,
         bounds = Bounds(min(p0) - 250, max(p0) + 250)
         x0 = init_guess_f(p0, trgt, v0, vf, psi0, psif, dt, params.deg)
         x0 += np.random.randn()*randomizer
-        def fn(x): return cost_f(x, trgt, psif, params)
+        def fn(x): return cost_f(x, trgt, p0, v0, vf, psi0, psif, dt,
+                                 params.deg, params)
         cons = [{'type': 'ineq',
                  'fun': lambda x: nonlinear_constraints_f(x, p0, v0, vf, psi0,
                                                           psif, t0, tf, nveh,
@@ -64,23 +65,35 @@ def plan_flight(p0, v0, psi0, t0, trgt, trgt_cpts, pastCpts, pastTimes, params,
                     print(next(names))
                 else:
                     print(np.round(val, 3), end=', ')
+            cost_f(results.x, trgt, p0, v0, vf, psi0, psif, dt, params.deg,
+                   params,
+                   disp=True)
             print()
-            randomizer += 1
-
-#            y = reshape_f(results.x, p0, v0, vf, psi0, psif, dt, params.deg)
-#            newTraj = Bezier(y, t0=t0, tf=tf)
+            randomizer += 5
+#            if randomizer > 10:
+#                raise Exception('Maximum iterations met!')
+#
+            y = reshape_f(results.x, p0, v0, vf, psi0, psif, dt, params.deg)
+            newTraj = Bezier(y, t0=t0, tf=tf)
 #
 #            newTraj.plot()
 #            plt.title('Trajectory')
 #            newTraj.diff().normSquare().elev(params.degElev).plot()
 #            plt.title('Norm Square')
 #            0/0
+            if min(cons[0]['fun'](results.x)) < -100000:
+                newTraj.diff().normSquare().elev(params.degElev).plot()
+                plt.title('Norm Square')
+                0/0
 
         y = reshape_f(results.x, p0, v0, vf, psi0, psif, dt, params.deg)
         newTraj = Bezier(y, t0=t0, tf=tf)
 
         if results.success:
             break
+        elif randomizer > 15:
+            break
+        break
 
     return newTraj
 
@@ -185,7 +198,7 @@ def init_guess_m(p0, trgt, v0, vf, psi0, dt, deg):
     return x0
 
 
-def cost_f(x, trgt, psif, params):
+def cost_f(x, trgt, p0, v0, vf, psi0, psif, dt, deg, params, disp=False):
     """Cost function for the flight trajectory
 
     The cost is defined as the straight line distance between the final control
@@ -213,19 +226,32 @@ def cost_f(x, trgt, psif, params):
     :return: Cost of the current optimization iteration
     :rtype: float
     """
-    xidx = params.deg - 3
-    yidx = 2*params.deg - 5
-    xpos = x[xidx]
-    ypos = x[yidx]
+    y = reshape_f(x, p0, v0, vf, psi0, psif, dt, deg)
+#    xidx = params.deg - 3
+#    yidx = 2*params.deg - 5
+#    xpos = x[xidx]
+#    ypos = x[yidx]
+#    assert xpos == y[0, -1], 'xpos'
+#    assert ypos == y[1, -1], 'ypos'
+    xpos = y[0, -1]
+    ypos = y[1, -1]
     # Adding pi to psif since the heading angle points directly opposite the
     # direction of the vector from the target to the random point along the
     # outer monitoring radius
     trgtX = trgt[0] + params.outerR*np.cos(psif+np.pi)
     trgtY = trgt[1] + params.outerR*np.sin(psif+np.pi)
-    val = np.linalg.norm([trgtX - xpos,
-                          trgtY - ypos])
+    finalPosCost = np.linalg.norm([trgtX - xpos,
+                                   trgtY - ypos])
 
-    return val
+    # Min euclidean distance between cpts
+    euclidCost = _euclideanObjective(y, 1, 2)
+
+    if disp:
+        print()
+        print(f'Pos Cost: {finalPosCost}')
+        print(f'Euclid Cost: {euclidCost}')
+
+    return 100*finalPosCost + euclidCost
 
 
 # TODO
@@ -536,6 +562,49 @@ def angular_rate_sqr(traj):
     weights = denominator.cpts
 
     return RationalBezier(cpts, weights)
+
+
+# TODO Figure out why this returns such large nuumbers (likely due to variable
+#   type issues with numba)
+#@njit(cache=True)
+def _euclideanObjective(y, nVeh, dim):
+    """Sums the Euclidean distance between control points.
+
+    The Euclidean difference between each neighboring pair of control points is
+    summed for each vehicle.
+
+    :param y: Optimized vector that has been reshaped using the reshapeVector
+        function.
+    :type y: numpy.ndarray
+    :param nVeh: Number of vehicles
+    :type nVeh: int
+    :param dim: Dimension of the vehicles. Currently only works for 2D
+    :type dim: int
+    :return: Sum of the Euclidean distances
+    :rtype: float
+    """
+    summation = 0.0
+    temp = np.empty(3)
+    length = y.shape[1]
+    for veh in range(nVeh):
+        for i in range(length-1):
+            for j in range(dim):
+                temp[j] = y[veh*dim+j, i+1] - y[veh*dim+j, i]
+
+            summation += _norm(temp)  # np.linalg.norm(temp)
+
+    return summation
+
+
+#@njit(cache=True)
+def _norm(x):
+    """
+    """
+    summation = 0.
+    for val in x:
+        summation += val*val
+
+    return np.sqrt(summation)
 
 
 if __name__ == '__main__':

@@ -1,38 +1,29 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Created on Sun Mar 15 20:29:07 2020
+Created on Fri Mar 20 05:21:27 2020
 
 @author: ckielasjensen
 """
-import time
 
 import matplotlib.pyplot as plt
 import numpy as np
 
 from agent import Agent
-from simulator import Simulator
 from target import Target
-
-#SIM_TF = 100  # Time at which to stop the simulation (s)
-TIME_MULT = 1  # Speed at which virtual time should progress, 1 is real time
 
 
 class Parameters:
     """
     """
     def __init__(self):
-        self.deg = 5       # Order of approximation
+        # Agent
         self.nveh = 3       # Number of vehicles
-        self.ndim = 2       # Number of dimensions
         self.dsafe = 1      # Minimum safe distance between vehicles (m)
-        self.odsafe = 2     # Minimum safe distance from obstacles (m)
         self.vmax = 100      # Maximum speed (m/s)
         self.vmin = 1       # Minimum speed (m/s)
         self.wmax = np.pi/2     # Maximum angular rate (rad/s)
-#        self.tf = 25.0
-        self.tflight = 30.0     # Flight traj time (s)
-        self.tmon = 10.0    # Monitoring traj time (s)
+        self.monSpeed = 3.0
 
         # Target constraints
         self.outerR = 75
@@ -40,14 +31,11 @@ class Parameters:
         self.noflyR = 1
         self.detPer = 1     # Detection period of the target (s)
 
-        self.iniPt = np.array([0, 0])
-        self.iniSpeed = 3
-        self.iniAng = 0
-        self.monSpeed = 3.0
-        self.monT = (self.outerR-self.innerR)/self.monSpeed
-
         # Optimization constraints
-        self.degElev = 30
+        self.deg = 5       # Order of approximation
+        self.degElev = 10
+        self.tflight = 30.0     # Flight traj time (s)
+        self.tmon = 10.0    # Monitoring traj time (s)
 
         # Misc
         np.random.seed(0)
@@ -56,12 +44,8 @@ class Parameters:
         self.replanRad = 5  # If Ept is this different, replan
 
 
-#if __name__ == '__main__':
-def main(ax, SIM_TF):
-    # Initialize plots
-#    plt.close('all')
-#    fig, ax = plt.subplots(1, 1)
-
+def main():
+    fig, ax = plt.subplots()
     ax.set_aspect('equal')
     ax.set_xlim(-15, 110)
     ax.set_ylim(-15, 110)
@@ -92,18 +76,11 @@ def main(ax, SIM_TF):
     ax.legend()
 
     # Run the simulation
-    t0 = 0.0
-    t = 0.0
-    t_trgt = 0.0
-    agentIdx = 0
-    while t < SIM_TF:
+    for t in np.arange(0, 60.1, 0.1):
         # Update states
         target.update(t)
         for agent in agents:
             agent.update(t)
-#            if t - t_trgt >= TARGET_PERIOD:
-#                t_trgt = t
-#                agent.detect_target(target.get_state())
 
         # Detect target
         if t % params.detPer < 1e-6:
@@ -116,26 +93,14 @@ def main(ax, SIM_TF):
         for i, agent in enumerate(agents):
             pts = agent.get_state()
             agentPlots[i][0].set_data(pts[0], pts[1])
-        plt.pause(0.01)
-
-#        t = TIME_MULT*time.time() - t0
-        t += 0.1
-#        print(t)
-        if t > 35:
-            target.send_cmd(3, 0)
-
-        if t > 45:
-            target.send_cmd(3, np.pi/8)
-
-        if t > 47:
-            target.send_cmd(3, 0)
+        plt.pause(0.001)
 
     Agent.agentIdx = 0
     Agent.trajList = []
     Agent.timeList = []
     return
 
+
 if __name__ == '__main__':
     plt.close('all')
-    fig, ax = plt.subplots(1, 1)
-    main(ax, 60)
+    main()
