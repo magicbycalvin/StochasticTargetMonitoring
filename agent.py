@@ -89,6 +89,9 @@ class Agent:
         trgt_cpts = self.predict_trgt_traj(tf)
         self._last_trgt = trgt.copy()
 
+        trgt_traj = Bezier(trgt_cpts, t0=t0, tf=tf)
+        trgt_traj.plot(self._ax, showCpts=False, color='k', ls=':')
+
         # Plan the flight trajectory and then share it to the other agents via
         # the Agent class variable
         flight_traj = plan_flight(p0, v0, psi0, t0, trgt, trgt_cpts, pastCpts,

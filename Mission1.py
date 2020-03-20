@@ -11,38 +11,8 @@ from matplotlib.patches import Circle
 import numpy as np
 
 from agent import Agent
+from parameters import Parameters
 from target import Target
-
-
-class Parameters:
-    """
-    """
-    def __init__(self):
-        # Agent
-        self.nveh = 3       # Number of vehicles
-        self.dsafe = 1      # Minimum safe distance between vehicles (m)
-        self.vmax = 100      # Maximum speed (m/s)
-        self.vmin = 1       # Minimum speed (m/s)
-        self.wmax = np.pi/2     # Maximum angular rate (rad/s)
-        self.monSpeed = 3.0
-
-        # Target constraints
-        self.outerR = 75
-        self.innerR = 25
-        self.noflyR = 1
-        self.detPer = 1     # Detection period of the target (s)
-
-        # Optimization constraints
-        self.deg = 5       # Order of approximation
-        self.degElev = 10
-        self.tflight = 30.0     # Flight traj time (s)
-        self.tmon = 10.0    # Monitoring traj time (s)
-
-        # Misc
-        np.random.seed(0)
-        self.iprint = 0     # Verbosity of minimizer output (0, 1, or 2)
-        self.relaxation = 1e-3  # Relaxation for final mon point and inner R
-        self.replanRad = 5  # If Ept is this different, replan
 
 
 def plot1():
@@ -148,7 +118,7 @@ def plot2():
     cir1 = Circle(target.get_state()[:2], ls=':', fill=False, ec='r',
                   label='Outer Radius', radius=params.outerR)
     cir2 = Circle(target.get_state()[:2], ls=':', fill=False, ec='r',
-                  label='Outer Radius', radius=params.innerR)
+                  label='Inner Radius', radius=params.innerR)
     ax.add_artist(cir1)
     ax.add_artist(cir2)
 
