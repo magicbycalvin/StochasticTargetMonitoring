@@ -146,9 +146,9 @@ def plot2():
 
 
 def main():
-    plot2()
-    plot1()
 #    plot2()
+    plot1()
+    plot2()
 
 
 if __name__ == '__main__':

@@ -88,8 +88,8 @@ def plan_flight(p0, v0, psi0, t0, trgt, trgt_cpts, pastCpts, pastTimes, params,
 #                plt.title('Norm Square')
 #                0/0
 
-            if np.any(temp[-31:] < 0):
-                (newTraj.elev(params.degElev) - trgt_traj).normSquare().plot()
+#            if np.any(temp[-31:] < 0):
+#                (newTraj.elev(params.degElev) - trgt_traj).normSquare().plot()
 
         y = reshape_f(results.x, p0, v0, vf, psi0, psif, dt, params.deg)
         newTraj = Bezier(y, t0=t0, tf=tf)

@@ -72,6 +72,8 @@ def plot2():
     ax.set_aspect('equal')
     ax.set_xlim(-50, 350)
     ax.set_ylim(-75, 110)
+#    mng = plt.get_current_fig_manager()
+#    mng.resize(1920, 1080)
 
     # Initialize classes
     params = Parameters()
@@ -116,9 +118,15 @@ def plot2():
         if t >= 1:
             target.send_cmd(3, 0)
 
+#        if t >= 5:
+#            target.send_cmd(8, np.pi/2)
+#
+#        if t >= 5.5:
+#            target.send_cmd(8, 0)
+
         plt.pause(0.01)
-        if t >= 30:
-            break
+#        if t >= 20:
+#            break
 
     # Plot the inner and outer radii
     cir1 = Circle(target.get_state()[:2], ls=':', fill=False, ec='r',
