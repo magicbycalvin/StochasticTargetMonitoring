@@ -107,15 +107,18 @@ class Agent:
         # If we have an axis, plot the new trajectory
         if self._ax is not None:
             if self._flight_plot is None:
-                self._flight_plot = self._ax.plot(flight_traj.curve[0, :],
-                                                  flight_traj.curve[1, :],
-                                                  color=Agent.colors[self.idx],
-                                                  linestyle='-')[0]
+                self._flight_plot = [self._ax.plot(flight_traj.curve[0, :],
+                                     flight_traj.curve[1, :],
+                                     color=Agent.colors[self.idx],
+                                     linestyle='-')[0]]
             else:
-                self._flight_plot.set_xdata(flight_traj.curve[0, :])
-                self._flight_plot.set_ydata(flight_traj.curve[1, :])
-#            flight_traj.plot(self._ax, showCpts=False,
-#                             color=Agent.colors[self.idx], linestyle='-')
+#                self._flight_plot.set_xdata(flight_traj.curve[0, :])
+#                self._flight_plot.set_ydata(flight_traj.curve[1, :])
+                self._flight_plot.append(self._ax.plot(flight_traj.curve[0, :],
+                                         flight_traj.curve[1, :],
+                                         color=Agent.colors[self.idx],
+                                         linestyle='-')[0])
+
             plt.pause(0.001)
 
     def compute_mon_traj(self, tf=None):
@@ -158,15 +161,17 @@ class Agent:
         # If we have an axis, plot the new trajectory
         if self._ax is not None:
             if self._mon_plot is None:
-                self._mon_plot = self._ax.plot(mon_traj.curve[0, :],
-                                               mon_traj.curve[1, :],
-                                               color=Agent.colors[self.idx],
-                                               linestyle='--')[0]
+                self._mon_plot = [self._ax.plot(mon_traj.curve[0, :],
+                                                mon_traj.curve[1, :],
+                                                color=Agent.colors[self.idx],
+                                                linestyle='--')[0]]
             else:
-                self._flight_plot.set_xdata(mon_traj.curve[0, :])
-                self._flight_plot.set_ydata(mon_traj.curve[1, :])
-#            mon_traj.plot(self._ax, showCpts=False,
-#                             color=Agent.colors[self.idx], linestyle='--')
+#                self._mon_plot.set_xdata(mon_traj.curve[0, :])
+#                self._mon_plot.set_ydata(mon_traj.curve[1, :])
+                self._mon_plot.append(self._ax.plot(mon_traj.curve[0, :],
+                                      mon_traj.curve[1, :],
+                                      color=Agent.colors[self.idx],
+                                      linestyle='--')[0])
             plt.pause(0.001)
 
     def detect_target(self, target_state):

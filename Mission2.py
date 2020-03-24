@@ -15,11 +15,15 @@ from parameters import Parameters
 from target import Target
 
 
+XLIM = (-50, 350)
+YLIM = (-100, 110)
+
+
 def plot1():
     fig, ax = plt.subplots()
     ax.set_aspect('equal')
-    ax.set_xlim(-60, 110)
-    ax.set_ylim(-60, 110)
+    ax.set_xlim(*XLIM)
+    ax.set_ylim(*YLIM)
 
     # Initialize classes
     params = Parameters()
@@ -63,15 +67,15 @@ def plot1():
     Agent.trajList = []
     Agent.timeList = []
 
-    plt.title('$t = 0$')
-    return
+    plt.title('$t = 0.0 s$')
+    return ax, target, agents
 
 
-def plot2():
+def plot2(tb=60.0, targetTracer=False):
     fig, ax = plt.subplots()
     ax.set_aspect('equal')
-    ax.set_xlim(-50, 350)
-    ax.set_ylim(-75, 110)
+    ax.set_xlim(*XLIM)
+    ax.set_ylim(*YLIM)
 #    mng = plt.get_current_fig_manager()
 #    mng.resize(1920, 1080)
 
@@ -118,6 +122,22 @@ def plot2():
         if t >= 1:
             target.send_cmd(3, 0)
 
+        if targetTracer:
+            if np.abs(t-30) < 1e-4:
+                temp = target.get_state()
+                ax.plot(temp[0], temp[1], 'r*', markersize=13,
+                        fillstyle='none')
+                ax.text(temp[0]-10, temp[1]+3, '$t = 30s$', fontsize=12)
+
+            elif np.abs(t-40) < 1e-4:
+                temp = target.get_state()
+                ax.plot(temp[0], temp[1], 'r*', markersize=13,
+                        fillstyle='none')
+                ax.text(temp[0]-10, temp[1]+3, '$t = 40s$', fontsize=12)
+
+        if t >= tb:
+            break
+
 #        if t >= 5:
 #            target.send_cmd(8, np.pi/2)
 #
@@ -149,14 +169,15 @@ def plot2():
     Agent.trajList = []
     Agent.timeList = []
 
-    plt.title(f'$t = {t}$')
-    return
+    plt.title(f'$t = {t} s$')
+    return ax, target, agents
 
 
-def main():
-    plot2()
-    plot1()
-#    plot2()
+def main(p2tb=60.0, targetTracer=False):
+    p2ret = plot2(tb=p2tb, targetTracer=targetTracer)
+    p1ret = plot1()
+
+    return p1ret, p2ret
 
 
 if __name__ == '__main__':
@@ -173,4 +194,4 @@ if __name__ == '__main__':
 #    plt.rcParams.update(plt.rcParamsDefault)
 #    plt.ion()
     plt.close('all')
-    main()
+    p1ret, p2ret = main()

@@ -15,11 +15,15 @@ from parameters import Parameters
 from target import Target
 
 
+XLIM = (-50, 300)
+YLIM = (-60, 250)
+
+
 def plot1():
     fig, ax = plt.subplots()
     ax.set_aspect('equal')
-    ax.set_xlim(-60, 110)
-    ax.set_ylim(-60, 110)
+    ax.set_xlim(*XLIM)
+    ax.set_ylim(*YLIM)
 
     # Initialize classes
     params = Parameters()
@@ -63,15 +67,15 @@ def plot1():
     Agent.trajList = []
     Agent.timeList = []
 
-    plt.title('$t = 0$')
-    return
+    plt.title('$t = 0.0 s$')
+    return ax, target, agents
 
 
 def plot2():
     fig, ax = plt.subplots()
     ax.set_aspect('equal')
-    ax.set_xlim(50, 250)
-    ax.set_ylim(50, 250)
+    ax.set_xlim(*XLIM)
+    ax.set_ylim(*YLIM)
 
     # Initialize classes
     params = Parameters()
@@ -141,14 +145,16 @@ def plot2():
     Agent.trajList = []
     Agent.timeList = []
 
-    plt.title(f'$t = {t}$')
-    return
+    plt.title(f'$t = {t} s$')
+    return ax, target, agents
 
 
 def main():
 #    plot2()
-    plot1()
-    plot2()
+    p1ret = plot1()
+    p2ret = plot2()
+
+    return p1ret, p2ret
 
 
 if __name__ == '__main__':

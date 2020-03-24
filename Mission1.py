@@ -64,8 +64,8 @@ def plot1():
     Agent.trajList = []
     Agent.timeList = []
 
-    plt.title('$t = 0$')
-    return
+    plt.title('$t = 0.0 s$')
+    return ax, target, agents
 
 
 def plot2():
@@ -136,13 +136,15 @@ def plot2():
     Agent.trajList = []
     Agent.timeList = []
 
-    plt.title(f'$t = {t}$')
-    return
+    plt.title(f'$t = {t} s$')
+    return ax, target, agents
 
 
 def main():
-    plot1()
-    plot2()
+    p1ret = plot1()
+    p2ret = plot2()
+
+    return p1ret, p2ret
 
 
 if __name__ == '__main__':
